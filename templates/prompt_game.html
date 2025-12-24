@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ team_name }} - AI Prompt Challenge</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js"></script>
+    <style>
+        body {
+            background: linear-gradient(135deg, #0f0f23 0%, #1a1a3e 100%);
+            color: white;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+        }
+        .header {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            border-bottom: 2px solid rgba(255, 215, 0, 0.3);
+        }
+        .team-name {
+            font-size: 1.3rem;
+            font-weight: 600;
+        }
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        .timer-display {
+            background: #dc3545;
+            color: white;
+            padding: 10px 25px;
+            border-radius: 50px;
+            font-size: 1.5rem;
+            font-weight: 700;
+            font-family: monospace;
+        }
+        .timer-display.warning {
+            animation: pulse 1s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { background: #dc3545; }
+            50% { background: #ff6b6b; }
+        }
+        .score-display {
+            background: linear-gradient(135deg, #ffd700 0%, #c9a227 100%);
+            color: #1a1a2e;
+            padding: 10px 30px;
+            border-radius: 50px;
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+        .game-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 30px;
+        }
+        .waiting-screen, .loading-screen {
+            text-align: center;
+            padding: 100px 20px;
+        }
+        .waiting-screen .icon, .loading-screen .icon {
+            font-size: 6rem;
+            margin-bottom: 30px;
+            animation: bounce 2s infinite;
+        }
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-20px); }
+        }
+        .round-header {
+            text-align: center;
+            padding: 30px;
+            margin-bottom: 30px;
+            background: linear-gradient(135deg, rgba(255,215,0,0.2) 0%, rgba(255,215,0,0.05) 100%);
+            border-radius: 20px;
+            border: 2px solid rgba(255,215,0,0.3);
+        }
+        .round-header h2 {
+            color: #ffd700;
+            font-size: 1.2rem;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            margin-bottom: 10px;
+        }
+        .challenge-card {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 25px;
+            border: 2px solid rgba(255,255,255,0.1);
+        }
+        .challenge-card.solved {
+            border-color: #28a745;
+            background: linear-gradient(135deg, rgba(40,167,69,0.2) 0%, #16213e 100%);
+        }
+        .challenge-id {
+            background: rgba(138, 43, 226, 0.3);
+            color: #da70d6;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            display: inline-block;
+            margin-bottom: 15px;
+        }
+        .challenge-id.bonus {
+            background: rgba(255,0,128,0.2);
+            color: #ff0080;
+        }
+        .challenge-id.boss {
+            background: rgba(255,215,0,0.3);
+            color: #ffd700;
+        }
+        .scenario-box {
+            background: rgba(0,0,0,0.3);
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-left: 4px solid #ffd700;
+        }
+        .given-data-box {
+            background: #282c34;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 14px;
+            color: #abb2bf;
+        }
+        .prompt-input {
+            width: 100%;
+            min-height: 150px;
+            background: #1e1e2e;
+            color: #f8f8f2;
+            border: 2px solid rgba(255,255,255,0.2);
+            border-radius: 10px;
+            padding: 15px;
+            font-size: 15px;
+            line-height: 1.6;
+            resize: vertical;
+        }
+        .prompt-input:focus {
+            outline: none;
+            border-color: #8a2be2;
+        }
+        .btn-generate {
+            background: linear-gradient(135deg, #8a2be2 0%, #6a1b9a 100%);
+            border: none;
+            border-radius: 10px;
+            padding: 15px 40px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-right: 10px;
+        }
+        .btn-generate:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(138, 43, 226, 0.4);
+        }
+        .btn-run {
+            background: linear-gradient(135deg, #28a745 0%, #218838 100%);
+            border: none;
+            border-radius: 10px;
+            padding: 15px 40px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: white;
+            cursor: pointer;
+        }
+        .btn-submit {
+            background: linear-gradient(135deg, #ffd700 0%, #c9a227 100%);
+            border: none;
+            border-radius: 10px;
+            padding: 15px 40px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #1a1a2e;
+            cursor: pointer;
+        }
+        .code-display {
+            background: #282c34;
+            border-radius: 10px;
+            padding: 20px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 14px;
+            color: #abb2bf;
+            white-space: pre-wrap;
+            margin: 15px 0;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .output-box {
+            background: #1e1e1e;
+            border-radius: 10px;
+            padding: 20px;
+            font-family: monospace;
+            margin-bottom: 15px;
+        }
+        .output-label {
+            font-size: 0.85rem;
+            color: #888;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .output-content {
+            color: #4ec9b0;
+            white-space: pre-wrap;
+        }
+        .output-content.error {
+            color: #f44747;
+        }
+        .tips-box {
+            background: rgba(138, 43, 226, 0.1);
+            border: 1px solid rgba(138, 43, 226, 0.3);
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 15px;
+        }
+        .tips-box h5 {
+            color: #da70d6;
+            margin-bottom: 10px;
+        }
+        .tips-box ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+        .result-badge {
+            display: inline-block;
+            padding: 10px 25px;
+            border-radius: 50px;
+            font-weight: 700;
+            font-size: 1.1rem;
+            margin-top: 15px;
+        }
+        .result-badge.correct {
+            background: linear-gradient(135deg, #28a745 0%, #218838 100%);
+            color: white;
+        }
+        .result-badge.incorrect {
+            background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+            color: white;
+        }
+        .prompt-quality {
+            background: rgba(40, 167, 69, 0.1);
+            border: 1px solid rgba(40, 167, 69, 0.3);
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 10px;
+        }
+        .score-popup {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: linear-gradient(135deg, #28a745 0%, #218838 100%);
+            color: white;
+            padding: 40px 60px;
+            border-radius: 20px;
+            font-size: 2rem;
+            font-weight: 700;
+            z-index: 1000;
+            animation: popIn 0.5s ease;
+            display: none;
+        }
+        @keyframes popIn {
+            0% { transform: translate(-50%, -50%) scale(0); }
+            50% { transform: translate(-50%, -50%) scale(1.1); }
+            100% { transform: translate(-50%, -50%) scale(1); }
+        }
+        .paused-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.9);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 200;
+        }
+        .paused-overlay.show {
+            display: flex;
+        }
+        .points-badge {
+            float: right;
+            background: rgba(255,255,255,0.1);
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+        }
+        .points-badge.earned {
+            background: rgba(40,167,69,0.3);
+            color: #28a745;
+        }
+        .expected-output-box {
+            background: rgba(40,167,69,0.1);
+            border: 2px solid #28a745;
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="team-name">🤖 {{ team_name }}</div>
+        <div class="header-right">
+            <div class="timer-display" id="timerDisplay">03:00</div>
+            <div class="score-display" id="scoreDisplay">{{ score }} pts</div>
+        </div>
+    </div>
+
+    <div class="score-popup" id="scorePopup"></div>
+
+    <div class="paused-overlay" id="pausedOverlay">
+        <div class="paused-message" style="text-align:center;">
+            <div style="font-size:5rem;">⏸️</div>
+            <p style="font-size:2rem;">Game Paused</p>
+            <small>Waiting for trainer to resume...</small>
+        </div>
+    </div>
+
+    <div class="game-container">
+        <!-- Loading Screen -->
+        <div id="loadingScreen" class="loading-screen">
+            <div class="icon">⚙️</div>
+            <h2>Loading Python Environment...</h2>
+            <p>Please wait while we set up your coding environment</p>
+        </div>
+
+        <!-- Waiting Screen -->
+        <div id="waitingScreen" class="waiting-screen" style="display: none;">
+            <div class="icon">🤖</div>
+            <h2>AI Prompt Challenge</h2>
+            <p>Waiting for the trainer to start the game...</p>
+            <p style="margin-top: 30px; opacity: 0.7;">Your team: <strong>{{ team_name }}</strong></p>
+        </div>
+
+        <!-- Game Content -->
+        <div id="gameContent" style="display: none;">
+            <div class="round-header" id="roundHeader">
+                <h2 id="roundTitle">Round 1</h2>
+                <h3 id="roundTheme">Loading...</h3>
+            </div>
+
+            <div id="challengesContainer">
+                <!-- Challenges will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io({
+            transports: ['polling'],
+            reconnection: true,
+            reconnectionAttempts: 5,
+            reconnectionDelay: 2000
+        });
+
+        const teamId = "{{ team_id }}";
+        let currentRound = {{ current_round }};
+        let solvedChallenges = {};
+        let totalScore = {{ score }};
+        let pyodide = null;
+        let timerInterval = null;
+        let timeRemaining = 180;
+        let roundActive = false;
+
+        const allChallenges = {{ challenges | tojson | safe }};
+
+        socket.on('connect', function() {
+            socket.emit('join_prompt_team', { team_id: teamId });
+        });
+
+        // Poll for game state
+        setInterval(async function() {
+            try {
+                const response = await fetch('/api/prompt/game_state');
+                const data = await response.json();
+
+                if (data.current_round > 0 && data.current_round !== currentRound && data.game_started) {
+                    currentRound = data.current_round;
+                    document.getElementById('waitingScreen').style.display = 'none';
+                    document.getElementById('gameContent').style.display = 'block';
+                    loadRound(data.current_round);
+                    if (!timerInterval) {
+                        timeRemaining = data.time_remaining || 180;
+                        startTimer();
+                    }
+                }
+
+                document.getElementById('pausedOverlay').classList.toggle('show', data.game_paused);
+            } catch (e) {
+                console.log('Polling error:', e);
+            }
+        }, 3000);
+
+        async function initPyodide() {
+            try {
+                pyodide = await loadPyodide();
+                document.getElementById('loadingScreen').style.display = 'none';
+
+                const response = await fetch('/api/prompt/game_state');
+                const data = await response.json();
+
+                solvedChallenges = data.your_attempts || {};
+                totalScore = data.your_score;
+                document.getElementById('scoreDisplay').textContent = totalScore + ' pts';
+
+                if (data.game_started && data.current_round > 0) {
+                    document.getElementById('waitingScreen').style.display = 'none';
+                    document.getElementById('gameContent').style.display = 'block';
+                    loadRound(data.current_round);
+
+                    if (data.time_remaining && data.time_remaining > 0) {
+                        timeRemaining = data.time_remaining;
+                        startTimer();
+                    }
+                } else {
+                    document.getElementById('waitingScreen').style.display = 'block';
+                }
+
+                if (data.game_paused) {
+                    document.getElementById('pausedOverlay').classList.add('show');
+                }
+            } catch (error) {
+                console.error("Failed to load Pyodide:", error);
+                document.getElementById('loadingScreen').innerHTML = `
+                    <div class="icon">❌</div>
+                    <h2>Error Loading Python</h2>
+                    <p>Please refresh the page</p>
+                `;
+            }
+        }
+
+        function startTimer() {
+            roundActive = true;
+            updateTimerDisplay();
+
+            timerInterval = setInterval(() => {
+                timeRemaining--;
+                updateTimerDisplay();
+
+                if (timeRemaining <= 0) {
+                    clearInterval(timerInterval);
+                    roundActive = false;
+                    disableAllInputs();
+                }
+            }, 1000);
+        }
+
+        function updateTimerDisplay() {
+            const minutes = Math.floor(timeRemaining / 60);
+            const seconds = timeRemaining % 60;
+            const display = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            const timerEl = document.getElementById('timerDisplay');
+            timerEl.textContent = display;
+
+            if (timeRemaining <= 60) {
+                timerEl.classList.add('warning');
+            } else {
+                timerEl.classList.remove('warning');
+            }
+        }
+
+        function disableAllInputs() {
+            document.querySelectorAll('textarea').forEach(el => el.disabled = true);
+            document.querySelectorAll('button').forEach(el => el.disabled = true);
+        }
+
+        async function runPythonCode(code) {
+            if (!pyodide) {
+                return { output: '', error: 'Python environment not loaded' };
+            }
+
+            try {
+                pyodide.runPython(`
+import sys
+from io import StringIO
+sys.stdout = StringIO()
+                `);
+
+                pyodide.runPython(code);
+                const output = pyodide.runPython(`sys.stdout.getvalue()`);
+                pyodide.runPython(`sys.stdout = sys.__stdout__`);
+
+                return { output: output.trim(), error: null };
+            } catch (error) {
+                try {
+                    pyodide.runPython(`sys.stdout = sys.__stdout__`);
+                } catch (e) {}
+                return { output: '', error: error.message };
+            }
+        }
+
+        socket.on('prompt_round_started', function(data) {
+            currentRound = data.round;
+            timeRemaining = data.time_limit || 180;
+
+            document.getElementById('waitingScreen').style.display = 'none';
+            document.getElementById('gameContent').style.display = 'block';
+
+            loadRound(data.round);
+
+            if (timerInterval) clearInterval(timerInterval);
+            startTimer();
+        });
+
+        socket.on('prompt_game_paused', function(data) {
+            document.getElementById('pausedOverlay').classList.toggle('show', data.paused);
+        });
+
+        socket.on('prompt_game_reset', function() {
+            window.location.reload();
+        });
+
+        function loadRound(roundNum) {
+            const round = allChallenges[roundNum];
+            if (!round) return;
+
+            document.getElementById('roundTitle').textContent = `Round ${roundNum}: ${round.title}`;
+            document.getElementById('roundTheme').textContent = round.theme;
+
+            const container = document.getElementById('challengesContainer');
+            let html = '';
+
+            round.challenges.forEach(c => {
+                const solved = solvedChallenges[c.id];
+                const isBonus = c.is_bonus;
+                const isBoss = c.is_boss;
+                const cardClass = solved && solved.correct ? 'solved' : '';
+                const badgeClass = isBoss ? 'boss' : (isBonus ? 'bonus' : '');
+
+                html += `
+                    <div class="challenge-card ${cardClass}" id="card-${c.id}">
+                        <span class="challenge-id ${badgeClass}">
+                            ${isBoss ? '👑 BOSS: ' : (isBonus ? '⭐ BONUS: ' : '')}${c.title}
+                        </span>
+                        <span class="points-badge ${solved && solved.correct ? 'earned' : ''}" id="points-${c.id}">
+                            ${solved && solved.correct ? '✓ ' + solved.points + ' pts' : c.points + ' pts'}
+                        </span>
+
+                        <div class="scenario-box">
+                            <h5 style="color:#ffd700; margin-bottom:10px;">📋 Scenario</h5>
+                            <p style="white-space:pre-wrap;">${c.scenario}</p>
+                        </div>
+
+                        <div class="given-data-box">
+                            <div style="color:#888; font-size:0.8rem; margin-bottom:5px;">📥 GIVEN DATA:</div>
+                            <pre style="margin:0; color:#98c379;">${escapeHtml(c.given_data)}</pre>
+                        </div>
+
+                        <div class="expected-output-box" style="background:rgba(100,100,100,0.1); border-color:#666;">
+                            <div style="color:#888; font-size:0.8rem; margin-bottom:5px;">📤 EXPECTED OUTPUT:</div>
+                            <pre style="margin:0; color:#61afef;">${escapeHtml(c.expected_output)}</pre>
+                        </div>
+
+                        <div style="margin-top:20px;">
+                            <label style="display:block; margin-bottom:10px; color:#da70d6;">
+                                ✍️ Write your prompt to generate Python code:
+                            </label>
+                            <textarea class="prompt-input" id="prompt-${c.id}"
+                                placeholder="Write a clear prompt describing what Python code you need...
+
+Example: Write Python code that:
+1. Calculates the compound interest using the formula...
+2. Formats the output with 2 decimal places...
+3. Prints the result as..."
+                                ${solved && solved.correct ? 'disabled' : ''}
+                            >${solved ? solved.prompt || '' : ''}</textarea>
+                        </div>
+
+                        <div class="tips-box">
+                            <h5>💡 Hints</h5>
+                            <ul>
+                                ${c.hints.map(h => `<li>${h}</li>`).join('')}
+                            </ul>
+                        </div>
+
+                        <div style="margin-top:20px;">
+                            <button class="btn-generate" id="btnGen-${c.id}" onclick="generateCode('${c.id}')"
+                                ${solved && solved.correct ? 'disabled' : ''}>
+                                🤖 Generate Code
+                            </button>
+                            <button class="btn-run" id="btnRun-${c.id}" onclick="runCode('${c.id}')"
+                                style="display:none;">
+                                ▶️ Run Code
+                            </button>
+                            <button class="btn-submit" id="btnSubmit-${c.id}" onclick="submitAnswer('${c.id}')"
+                                style="display:none;">
+                                ✅ Submit Answer
+                            </button>
+                        </div>
+
+                        <div id="codeSection-${c.id}" style="display:none; margin-top:20px;">
+                            <div style="color:#888; font-size:0.8rem; margin-bottom:5px;">🤖 AI GENERATED CODE:</div>
+                            <div class="code-display" id="code-${c.id}"></div>
+                        </div>
+
+                        <div id="outputSection-${c.id}" style="display:none; margin-top:20px;">
+                            <div class="output-box">
+                                <div class="output-label">Your Output:</div>
+                                <div class="output-content" id="output-${c.id}"></div>
+                            </div>
+                        </div>
+
+                        <div id="result-${c.id}" style="margin-top:15px;"></div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        async function generateCode(challengeId) {
+            const promptEl = document.getElementById(`prompt-${challengeId}`);
+            const prompt = promptEl.value.trim();
+
+            if (!prompt) {
+                alert('Please write a prompt first!');
+                return;
+            }
+
+            const btn = document.getElementById(`btnGen-${challengeId}`);
+            btn.disabled = true;
+            btn.innerHTML = '⏳ Generating...';
+
+            try {
+                const response = await fetch('/api/prompt/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        prompt: prompt,
+                        challenge_id: challengeId
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    document.getElementById(`codeSection-${challengeId}`).style.display = 'block';
+                    document.getElementById(`code-${challengeId}`).textContent = data.code;
+                    document.getElementById(`btnRun-${challengeId}`).style.display = 'inline-block';
+
+                    // Show prompt quality feedback
+                    if (data.prompt_quality) {
+                        const qualityHtml = `
+                            <div class="prompt-quality">
+                                <strong>📊 Prompt Quality:</strong> +${data.prompt_quality.bonus_points} bonus pts
+                                <br><small>${data.prompt_quality.feedback.join(' | ') || 'Keep refining your prompt!'}</small>
+                            </div>
+                        `;
+                        document.getElementById(`result-${challengeId}`).innerHTML = qualityHtml;
+                    }
+
+                    btn.innerHTML = '🤖 Regenerate';
+                } else {
+                    alert('Error: ' + data.error);
+                    btn.innerHTML = '🤖 Generate Code';
+                }
+
+                btn.disabled = false;
+            } catch (error) {
+                alert('Error generating code: ' + error.message);
+                btn.disabled = false;
+                btn.innerHTML = '🤖 Generate Code';
+            }
+        }
+
+        async function runCode(challengeId) {
+            const code = document.getElementById(`code-${challengeId}`).textContent;
+            const btn = document.getElementById(`btnRun-${challengeId}`);
+
+            btn.disabled = true;
+            btn.innerHTML = '⏳ Running...';
+
+            const result = await runPythonCode(code);
+
+            document.getElementById(`outputSection-${challengeId}`).style.display = 'block';
+            const outputEl = document.getElementById(`output-${challengeId}`);
+
+            if (result.error) {
+                outputEl.className = 'output-content error';
+                outputEl.textContent = 'Error: ' + result.error;
+            } else {
+                outputEl.className = 'output-content';
+                outputEl.textContent = result.output || '(no output)';
+                document.getElementById(`btnSubmit-${challengeId}`).style.display = 'inline-block';
+            }
+
+            btn.disabled = false;
+            btn.innerHTML = '▶️ Run Code';
+        }
+
+        async function submitAnswer(challengeId) {
+            if (!roundActive) {
+                alert("Time's up!");
+                return;
+            }
+
+            const prompt = document.getElementById(`prompt-${challengeId}`).value;
+            const code = document.getElementById(`code-${challengeId}`).textContent;
+            const output = document.getElementById(`output-${challengeId}`).textContent;
+            const btn = document.getElementById(`btnSubmit-${challengeId}`);
+
+            btn.disabled = true;
+            btn.innerHTML = '⏳ Submitting...';
+
+            try {
+                const response = await fetch('/api/prompt/submit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        challenge_id: challengeId,
+                        prompt: prompt,
+                        generated_code: code,
+                        output: output
+                    })
+                });
+
+                const data = await response.json();
+
+                const card = document.getElementById(`card-${challengeId}`);
+                const pointsBadge = document.getElementById(`points-${challengeId}`);
+                const resultDiv = document.getElementById(`result-${challengeId}`);
+
+                if (data.correct) {
+                    card.classList.add('solved');
+                    pointsBadge.classList.add('earned');
+                    pointsBadge.textContent = '✓ ' + data.points_earned + ' pts';
+
+                    solvedChallenges[challengeId] = { correct: true, points: data.points_earned };
+
+                    totalScore = data.total_score;
+                    document.getElementById('scoreDisplay').textContent = totalScore + ' pts';
+
+                    resultDiv.innerHTML = `
+                        <div class="result-badge correct">✓ CORRECT! +${data.points_earned} pts</div>
+                        ${data.prompt_bonus > 0 ? `<div style="color:#28a745; margin-top:10px;">Prompt Quality Bonus: +${data.prompt_bonus} pts</div>` : ''}
+                    `;
+
+                    showScorePopup(`+${data.points_earned} pts!`);
+
+                    document.getElementById(`prompt-${challengeId}`).disabled = true;
+                    document.getElementById(`btnGen-${challengeId}`).disabled = true;
+                    document.getElementById(`btnRun-${challengeId}`).disabled = true;
+                    btn.style.display = 'none';
+                } else {
+                    resultDiv.innerHTML = `
+                        <div class="result-badge incorrect">✗ INCORRECT - Try Again!</div>
+                        <div class="expected-output-box" style="margin-top:15px;">
+                            <h5 style="color:#28a745;">Expected Output:</h5>
+                            <pre style="color:#98c379;">${escapeHtml(data.expected_output || '')}</pre>
+                        </div>
+                        <p style="margin-top:10px; opacity:0.7;">Attempt ${data.attempt_number}/3 - Refine your prompt and try again!</p>
+                    `;
+                    btn.innerHTML = '✅ Submit Answer';
+                    btn.disabled = false;
+                }
+            } catch (error) {
+                alert('Error submitting: ' + error.message);
+                btn.disabled = false;
+                btn.innerHTML = '✅ Submit Answer';
+            }
+        }
+
+        function showScorePopup(text) {
+            const popup = document.getElementById('scorePopup');
+            popup.textContent = text;
+            popup.style.display = 'block';
+
+            setTimeout(() => {
+                popup.style.display = 'none';
+            }, 1500);
+        }
+
+        initPyodide();
+    </script>
+</body>
+</html>
