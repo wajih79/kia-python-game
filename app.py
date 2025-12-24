@@ -472,10 +472,16 @@ def index():
 @app.route('/trainer')
 def trainer_dashboard():
     """Trainer dashboard to control the game and view all scores"""
-    # Use local network IP so other devices can connect
-    local_ip = get_local_ip()
-    port = request.host.split(':')[-1] if ':' in request.host else '8080'
-    join_url = f"http://{local_ip}:{port}/join"
+    # Check if running on Render (production) or locally
+    if os.environ.get('RENDER'):
+        # Use the Render external URL
+        render_url = os.environ.get('RENDER_EXTERNAL_URL', request.host_url.rstrip('/'))
+        join_url = f"{render_url}/join"
+    else:
+        # Use local network IP so other devices can connect
+        local_ip = get_local_ip()
+        port = request.host.split(':')[-1] if ':' in request.host else '8080'
+        join_url = f"http://{local_ip}:{port}/join"
     qr_code = generate_qr_code(join_url)
 
     return render_template('trainer.html',
