@@ -432,8 +432,11 @@ def normalize_output(output):
     """Normalize output for comparison (strip whitespace, normalize newlines)"""
     if output is None:
         return ""
-    # Strip whitespace, normalize line endings
-    return re.sub(r'\s+', ' ', str(output).strip()).lower()
+    # Strip whitespace, normalize line endings to spaces, lowercase
+    text = str(output).strip()
+    text = text.replace('\r\n', '\n').replace('\r', '\n')
+    text = re.sub(r'\s+', ' ', text)
+    return text.lower()
 
 
 def check_output_match(user_output, expected_output):
