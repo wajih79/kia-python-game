@@ -931,6 +931,33 @@ def trainer_dashboard():
                          total_rounds=len(QUESTIONS))
 
 
+@app.route('/unified-trainer')
+def unified_trainer_dashboard():
+    """Unified trainer dashboard for both Python Challenge and AI Prompt Challenge"""
+    if os.environ.get('RENDER'):
+        render_url = os.environ.get('RENDER_EXTERNAL_URL', request.host_url.rstrip('/'))
+        python_join_url = f"{render_url}/join"
+        prompt_join_url = f"{render_url}/prompt-join"
+    else:
+        local_ip = get_local_ip()
+        port = request.host.split(':')[-1] if ':' in request.host else '8080'
+        python_join_url = f"http://{local_ip}:{port}/join"
+        prompt_join_url = f"http://{local_ip}:{port}/prompt-join"
+
+    python_qr = generate_qr_code(python_join_url)
+    prompt_qr = generate_qr_code(prompt_join_url)
+
+    return render_template('unified_trainer.html',
+                          python_qr=python_qr,
+                          python_join_url=python_join_url,
+                          python_current_round=game_state['current_round'],
+                          python_total_rounds=len(QUESTIONS),
+                          prompt_qr=prompt_qr,
+                          prompt_join_url=prompt_join_url,
+                          prompt_current_round=prompt_game_state['current_round'],
+                          prompt_total_rounds=len(PROMPT_CHALLENGES))
+
+
 @app.route('/join', methods=['GET', 'POST'])
 def join_game():
     """Team registration page"""
