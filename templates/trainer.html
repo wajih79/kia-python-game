@@ -207,6 +207,24 @@
                     <small class="text-muted">Teams scan this QR code to join the game</small>
                 </div>
 
+                <!-- Poll Section -->
+                <div class="control-panel" style="margin-bottom: 20px;">
+                    <h3>📊 Pre-Game Poll</h3>
+                    <div id="pollControls">
+                        <button class="action-btn btn-start" onclick="startPoll()" id="pollStartBtn">
+                            📊 Start Poll
+                        </button>
+                        <button class="action-btn btn-reset" onclick="stopPoll()" id="pollStopBtn" style="display:none;">
+                            ✕ Close Poll
+                        </button>
+                    </div>
+                    <div id="pollResults" style="display:none; margin-top:20px;">
+                        <h5 style="color:#ffd700;">What Takes Most of Your Time?</h5>
+                        <p style="font-size:0.9rem; opacity:0.7;">Responses: <span id="pollVoteCount">0</span></p>
+                        <div id="pollBars"></div>
+                    </div>
+                </div>
+
                 <!-- Control Panel -->
                 <div class="control-panel">
                     <h3>Game Control</h3>
@@ -366,6 +384,62 @@
             // Simple console notification for now
             console.log('Notification:', message);
         }
+
+        // Poll functions
+        function startPoll() {
+            fetch('/api/poll/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            }).then(() => {
+                document.getElementById('pollStartBtn').style.display = 'none';
+                document.getElementById('pollStopBtn').style.display = 'inline-block';
+                document.getElementById('pollResults').style.display = 'block';
+                updatePollBars({});
+            });
+        }
+
+        function stopPoll() {
+            fetch('/api/poll/stop', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            }).then(() => {
+                document.getElementById('pollStartBtn').style.display = 'inline-block';
+                document.getElementById('pollStopBtn').style.display = 'none';
+            });
+        }
+
+        function updatePollBars(results) {
+            const options = [
+                "Manual data entry and Excel formatting",
+                "Creating repetitive reports",
+                "Calculating portfolio metrics",
+                "Collecting data from multiple sources",
+                "Updating dashboards"
+            ];
+
+            let html = '';
+            options.forEach(option => {
+                const percent = results[option] || 0;
+                html += `
+                    <div style="margin-bottom:10px;">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
+                            <span style="font-size:0.85rem;">${option}</span>
+                            <span style="font-weight:bold;">${percent}%</span>
+                        </div>
+                        <div style="background:rgba(255,255,255,0.1); border-radius:10px; height:20px; overflow:hidden;">
+                            <div style="background:linear-gradient(135deg, #ffd700, #c9a227); height:100%; width:${percent}%; transition:width 0.5s;"></div>
+                        </div>
+                    </div>
+                `;
+            });
+            document.getElementById('pollBars').innerHTML = html;
+        }
+
+        // Handle poll updates from server
+        socket.on('poll_update', function(data) {
+            document.getElementById('pollVoteCount').textContent = data.total_votes;
+            updatePollBars(data.results);
+        });
 
         // Initial load of teams
         fetch('/api/trainer/teams')

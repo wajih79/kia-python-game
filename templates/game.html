@@ -365,6 +365,29 @@
         </div>
     </div>
 
+    <!-- Poll Overlay -->
+    <div class="poll-overlay" id="pollOverlay" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.95); z-index:300; display:none; align-items:center; justify-content:center;">
+        <div style="background:linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border-radius:20px; padding:40px; max-width:600px; width:90%; text-align:center;">
+            <div style="font-size:3rem; margin-bottom:20px;">📊</div>
+            <h2 style="color:#ffd700; margin-bottom:10px;">Quick Poll</h2>
+            <h3 id="pollQuestion" style="margin-bottom:30px;">What Takes Most of Your Time?</h3>
+            <p style="opacity:0.7; margin-bottom:20px;">Select all that apply:</p>
+
+            <div id="pollOptions" style="text-align:left;">
+                <!-- Options will be populated dynamically -->
+            </div>
+
+            <button onclick="submitPollVote()" style="background:linear-gradient(135deg, #ffd700, #c9a227); border:none; border-radius:10px; padding:15px 50px; font-size:1.2rem; font-weight:bold; color:#1a1a2e; cursor:pointer; margin-top:20px;">
+                Submit Vote
+            </button>
+
+            <div id="pollSubmitted" style="display:none; margin-top:20px; color:#28a745;">
+                <span style="font-size:2rem;">✓</span>
+                <p>Vote submitted! Waiting for others...</p>
+            </div>
+        </div>
+    </div>
+
     <div class="game-container">
         <!-- Loading Pyodide -->
         <div id="loadingScreen" class="loading-screen">
@@ -558,6 +581,47 @@ sys.stdout = StringIO()
         socket.on('game_reset', function() {
             window.location.reload();
         });
+
+        // Poll handlers
+        socket.on('poll_started', function(data) {
+            document.getElementById('pollQuestion').textContent = data.question;
+
+            let optionsHtml = '';
+            data.options.forEach((option, index) => {
+                optionsHtml += `
+                    <label style="display:block; background:rgba(255,255,255,0.1); padding:15px 20px; border-radius:10px; margin-bottom:10px; cursor:pointer; transition:all 0.3s;">
+                        <input type="checkbox" name="poll_option" value="${option}" style="margin-right:15px; transform:scale(1.3);">
+                        ${option}
+                    </label>
+                `;
+            });
+            document.getElementById('pollOptions').innerHTML = optionsHtml;
+            document.getElementById('pollSubmitted').style.display = 'none';
+            document.getElementById('pollOverlay').style.display = 'flex';
+        });
+
+        socket.on('poll_stopped', function() {
+            document.getElementById('pollOverlay').style.display = 'none';
+        });
+
+        function submitPollVote() {
+            const checkboxes = document.querySelectorAll('input[name="poll_option"]:checked');
+            const selectedOptions = Array.from(checkboxes).map(cb => cb.value);
+
+            if (selectedOptions.length === 0) {
+                alert('Please select at least one option!');
+                return;
+            }
+
+            fetch('/api/poll/vote', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ options: selectedOptions })
+            }).then(() => {
+                document.getElementById('pollSubmitted').style.display = 'block';
+                document.querySelectorAll('input[name="poll_option"]').forEach(cb => cb.disabled = true);
+            });
+        }
 
         function loadRound(roundNum) {
             const round = allQuestions[roundNum];

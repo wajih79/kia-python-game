@@ -34,6 +34,16 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 # Game configuration
 ROUND_TIME_LIMIT = 300  # 5 minutes per round
 
+# Pre-game poll configuration
+POLL_QUESTION = "What Takes Most of Your Time?"
+POLL_OPTIONS = [
+    "Manual data entry and Excel formatting",
+    "Creating repetitive reports",
+    "Calculating portfolio metrics",
+    "Collecting data from multiple sources",
+    "Updating dashboards"
+]
+
 # Game state stored in memory (use Redis for production scaling)
 game_state = {
     'teams': {},  # team_id: {name, score, current_round, answers, joined_at}
@@ -41,7 +51,9 @@ game_state = {
     'round_start_time': None,
     'game_started': False,
     'game_paused': False,
-    'trainer_connected': False
+    'trainer_connected': False,
+    'poll_active': False,
+    'poll_votes': {}  # team_id: [selected_options]
 }
 
 # Questions organized by rounds
@@ -686,6 +698,86 @@ def get_teams():
         'current_round': game_state['current_round'],
         'game_started': game_state['game_started']
     })
+
+
+# Poll endpoints
+@app.route('/api/poll/start', methods=['POST'])
+def start_poll():
+    """Trainer starts the poll"""
+    game_state['poll_active'] = True
+    game_state['poll_votes'] = {}
+
+    socketio.emit('poll_started', {
+        'question': POLL_QUESTION,
+        'options': POLL_OPTIONS
+    })
+
+    return jsonify({'success': True})
+
+
+@app.route('/api/poll/stop', methods=['POST'])
+def stop_poll():
+    """Trainer stops the poll"""
+    game_state['poll_active'] = False
+
+    socketio.emit('poll_stopped', {})
+
+    return jsonify({'success': True})
+
+
+@app.route('/api/poll/vote', methods=['POST'])
+def submit_vote():
+    """Team submits their vote"""
+    team_id = session.get('team_id')
+    if not team_id or team_id not in game_state['teams']:
+        return jsonify({'error': 'Not registered'}), 401
+
+    if not game_state['poll_active']:
+        return jsonify({'error': 'Poll not active'}), 400
+
+    data = request.json
+    selected_options = data.get('options', [])
+
+    game_state['poll_votes'][team_id] = selected_options
+
+    # Calculate results and send to trainer
+    results = calculate_poll_results()
+    socketio.emit('poll_update', {
+        'results': results,
+        'total_votes': len(game_state['poll_votes'])
+    }, room='trainer')
+
+    return jsonify({'success': True})
+
+
+@app.route('/api/poll/results')
+def get_poll_results():
+    """Get current poll results"""
+    results = calculate_poll_results()
+    return jsonify({
+        'question': POLL_QUESTION,
+        'options': POLL_OPTIONS,
+        'results': results,
+        'total_votes': len(game_state['poll_votes']),
+        'active': game_state['poll_active']
+    })
+
+
+def calculate_poll_results():
+    """Calculate poll results as percentages"""
+    results = {option: 0 for option in POLL_OPTIONS}
+    total_votes = len(game_state['poll_votes'])
+
+    for team_votes in game_state['poll_votes'].values():
+        for option in team_votes:
+            if option in results:
+                results[option] += 1
+
+    # Convert to percentages
+    if total_votes > 0:
+        results = {k: round((v / total_votes) * 100) for k, v in results.items()}
+
+    return results
 
 
 # SocketIO events
