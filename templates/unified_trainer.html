@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trainer Dashboard - KIA Python Games</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+    <style>
+        body {
+            background: #0f0f23;
+            color: white;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+        }
+        .navbar-custom {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            padding: 15px 30px;
+        }
+        .navbar-brand {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #ffd700 !important;
+        }
+        .dashboard {
+            padding: 20px;
+        }
+
+        /* Game Mode Tabs */
+        .game-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .game-tab {
+            flex: 1;
+            padding: 20px;
+            border-radius: 15px;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+        .game-tab.python {
+            background: rgba(255, 215, 0, 0.1);
+            border-color: rgba(255, 215, 0, 0.3);
+        }
+        .game-tab.python.active {
+            background: rgba(255, 215, 0, 0.2);
+            border-color: #ffd700;
+        }
+        .game-tab.prompt {
+            background: rgba(138, 43, 226, 0.1);
+            border-color: rgba(138, 43, 226, 0.3);
+        }
+        .game-tab.prompt.active {
+            background: rgba(138, 43, 226, 0.2);
+            border-color: #8a2be2;
+        }
+        .game-tab h3 {
+            margin: 0;
+            font-size: 1.3rem;
+        }
+        .game-tab .icon {
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+
+        /* Panels */
+        .game-panel {
+            display: none;
+        }
+        .game-panel.active {
+            display: block;
+        }
+
+        .qr-section {
+            background: white;
+            border-radius: 20px;
+            padding: 25px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .qr-section img {
+            max-width: 180px;
+            margin: 10px 0;
+        }
+        .qr-section h4 {
+            color: #1a1a2e;
+            font-weight: 700;
+            font-size: 1.1rem;
+        }
+        .qr-section .join-url {
+            background: #f0f0f0;
+            padding: 8px 15px;
+            border-radius: 10px;
+            font-family: monospace;
+            color: #333;
+            word-break: break-all;
+            font-size: 0.75rem;
+        }
+
+        .scoreboard {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            border-radius: 20px;
+            padding: 25px;
+            margin-bottom: 20px;
+        }
+        .scoreboard h3 {
+            color: #ffd700;
+            margin-bottom: 20px;
+            font-weight: 700;
+            font-size: 1.2rem;
+        }
+        .scoreboard.prompt h3 {
+            color: #da70d6;
+        }
+
+        .team-card {
+            background: rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .team-card.first {
+            background: linear-gradient(135deg, #ffd700 0%, #c9a227 100%);
+            color: #1a1a2e;
+        }
+        .team-card.second {
+            background: linear-gradient(135deg, #c0c0c0 0%, #a0a0a0 100%);
+            color: #1a1a2e;
+        }
+        .team-card.third {
+            background: linear-gradient(135deg, #cd7f32 0%, #a56023 100%);
+        }
+        .team-rank {
+            font-size: 1.5rem;
+            font-weight: 700;
+            width: 50px;
+        }
+        .team-info {
+            flex-grow: 1;
+            padding: 0 15px;
+        }
+        .team-name {
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+        .team-score {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .control-panel {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            border-radius: 20px;
+            padding: 25px;
+            margin-bottom: 20px;
+        }
+        .control-panel h3 {
+            color: #ffd700;
+            margin-bottom: 20px;
+            font-weight: 700;
+            font-size: 1.2rem;
+        }
+        .control-panel.prompt h3 {
+            color: #da70d6;
+        }
+
+        .round-btn {
+            background: rgba(255,255,255,0.1);
+            border: 2px solid rgba(255,255,255,0.3);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 10px;
+            margin: 5px;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .round-btn:hover {
+            background: rgba(255,255,255,0.2);
+            border-color: #ffd700;
+        }
+        .round-btn.active {
+            background: #ffd700;
+            color: #1a1a2e;
+            border-color: #ffd700;
+        }
+        .round-btn.prompt-active {
+            background: #8a2be2;
+            color: white;
+            border-color: #8a2be2;
+        }
+
+        .action-btn {
+            padding: 12px 30px;
+            font-size: 1rem;
+            border-radius: 10px;
+            margin: 5px;
+            cursor: pointer;
+            border: none;
+        }
+        .btn-pause {
+            background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%);
+            color: #1a1a2e;
+        }
+        .btn-reset {
+            background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+            color: white;
+        }
+
+        .current-round {
+            font-size: 1.2rem;
+            color: #ffd700;
+            margin: 15px 0;
+        }
+        .current-round.prompt {
+            color: #da70d6;
+        }
+
+        .no-teams {
+            text-align: center;
+            padding: 30px;
+            opacity: 0.7;
+        }
+        .no-teams .icon {
+            font-size: 3rem;
+            margin-bottom: 15px;
+        }
+
+        .live-badge {
+            background: #dc3545;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Poll Section */
+        .poll-section {
+            background: rgba(0,0,0,0.2);
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 15px;
+        }
+        .poll-section h5 {
+            color: #ffd700;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-custom">
+        <span class="navbar-brand">🎓 KIA Training - Trainer Dashboard</span>
+        <span class="live-badge">● LIVE</span>
+    </nav>
+
+    <div class="dashboard">
+        <!-- Game Mode Tabs -->
+        <div class="game-tabs">
+            <div class="game-tab python active" onclick="switchGame('python')">
+                <div class="icon">📝</div>
+                <h3>Python Coding Challenge</h3>
+                <small>Teams write Python code</small>
+            </div>
+            <div class="game-tab prompt" onclick="switchGame('prompt')">
+                <div class="icon">🤖</div>
+                <h3>AI Prompt Challenge</h3>
+                <small>Teams write prompts for AI</small>
+            </div>
+        </div>
+
+        <!-- Python Game Panel -->
+        <div class="game-panel active" id="pythonPanel">
+            <div class="row">
+                <div class="col-lg-4">
+                    <!-- QR Code -->
+                    <div class="qr-section">
+                        <h4>📱 Scan to Join Python Challenge</h4>
+                        <img src="data:image/png;base64,{{ python_qr }}" alt="QR Code">
+                        <p class="join-url">{{ python_join_url }}</p>
+                    </div>
+
+                    <!-- Control Panel -->
+                    <div class="control-panel">
+                        <h3>🎮 Game Control</h3>
+                        <p class="current-round">Round: <span id="pythonCurrentRound">{{ python_current_round }}</span> / {{ python_total_rounds }}</p>
+
+                        <div class="mb-3">
+                            <p><strong>Select Round:</strong></p>
+                            {% for i in range(1, python_total_rounds + 1) %}
+                            <button class="round-btn" onclick="startPythonRound({{ i }})" id="pythonRoundBtn{{ i }}">R{{ i }}</button>
+                            {% endfor %}
+                        </div>
+
+                        <!-- Poll Controls -->
+                        <div class="poll-section">
+                            <h5>📊 Pre-Game Poll</h5>
+                            <button class="action-btn btn-pause" onclick="startPoll()" id="pollStartBtn" style="padding: 8px 20px; font-size: 0.9rem;">
+                                Start Poll
+                            </button>
+                            <button class="action-btn btn-reset" onclick="stopPoll()" id="pollStopBtn" style="display:none; padding: 8px 20px; font-size: 0.9rem;">
+                                Stop Poll
+                            </button>
+                        </div>
+
+                        <div class="text-center mt-3">
+                            <button class="action-btn btn-pause" onclick="togglePythonPause()">
+                                <span id="pythonPauseText">⏸ Pause</span>
+                            </button>
+                            <button class="action-btn btn-reset" onclick="resetPythonGame()">🔄 Reset</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-8">
+                    <div class="scoreboard">
+                        <h3>🏆 Python Challenge - Live Scoreboard</h3>
+                        <div id="pythonTeamsContainer">
+                            <div class="no-teams">
+                                <div class="icon">👥</div>
+                                <p>Waiting for teams to join...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- AI Prompt Game Panel -->
+        <div class="game-panel" id="promptPanel">
+            <div class="row">
+                <div class="col-lg-4">
+                    <!-- QR Code -->
+                    <div class="qr-section">
+                        <h4>📱 Scan to Join AI Prompt Challenge</h4>
+                        <img src="data:image/png;base64,{{ prompt_qr }}" alt="QR Code">
+                        <p class="join-url">{{ prompt_join_url }}</p>
+                    </div>
+
+                    <!-- Control Panel -->
+                    <div class="control-panel prompt">
+                        <h3>🎮 Game Control</h3>
+                        <p class="current-round prompt">Round: <span id="promptCurrentRound">{{ prompt_current_round }}</span> / {{ prompt_total_rounds }}</p>
+
+                        <div class="mb-3">
+                            <p><strong>Select Round:</strong></p>
+                            {% for i in range(1, prompt_total_rounds + 1) %}
+                            <button class="round-btn" onclick="startPromptRound({{ i }})" id="promptRoundBtn{{ i }}">R{{ i }}</button>
+                            {% endfor %}
+                        </div>
+
+                        <div class="text-center mt-3">
+                            <button class="action-btn btn-pause" onclick="togglePromptPause()">
+                                <span id="promptPauseText">⏸ Pause</span>
+                            </button>
+                            <button class="action-btn btn-reset" onclick="resetPromptGame()">🔄 Reset</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-8">
+                    <div class="scoreboard prompt">
+                        <h3>🏆 AI Prompt Challenge - Live Scoreboard</h3>
+                        <div id="promptTeamsContainer">
+                            <div class="no-teams">
+                                <div class="icon">🤖</div>
+                                <p>Waiting for teams to join...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io({
+            transports: ['polling'],
+            reconnection: true,
+            reconnectionAttempts: 5,
+            reconnectionDelay: 2000
+        });
+
+        let pythonTeams = {};
+        let promptTeams = {};
+        let pythonPaused = false;
+        let promptPaused = false;
+
+        // Connect to both trainer rooms
+        socket.on('connect', function() {
+            socket.emit('join_trainer');
+            socket.emit('join_prompt_trainer');
+        });
+
+        // Switch between game panels
+        function switchGame(game) {
+            document.querySelectorAll('.game-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.game-panel').forEach(p => p.classList.remove('active'));
+
+            if (game === 'python') {
+                document.querySelector('.game-tab.python').classList.add('active');
+                document.getElementById('pythonPanel').classList.add('active');
+            } else {
+                document.querySelector('.game-tab.prompt').classList.add('active');
+                document.getElementById('promptPanel').classList.add('active');
+            }
+        }
+
+        // Poll for both games
+        setInterval(function() {
+            // Python game
+            fetch('/api/trainer/teams')
+                .then(r => r.json())
+                .then(data => {
+                    data.teams.forEach(t => {
+                        pythonTeams[t.id] = { name: t.name, score: t.score };
+                    });
+                    updatePythonScoreboard();
+                    document.getElementById('pythonCurrentRound').textContent = data.current_round;
+                }).catch(() => {});
+
+            // Prompt game
+            fetch('/api/prompt/trainer/teams')
+                .then(r => r.json())
+                .then(data => {
+                    data.teams.forEach(t => {
+                        promptTeams[t.id] = { name: t.name, score: t.score };
+                    });
+                    updatePromptScoreboard();
+                    document.getElementById('promptCurrentRound').textContent = data.current_round;
+                }).catch(() => {});
+        }, 2000);
+
+        // Socket events for Python game
+        socket.on('team_joined', function(data) {
+            pythonTeams[data.team_id] = { name: data.team_name, score: data.score };
+            updatePythonScoreboard();
+        });
+
+        socket.on('score_update', function(data) {
+            if (pythonTeams[data.team_id]) {
+                pythonTeams[data.team_id].score = data.score;
+                updatePythonScoreboard();
+            }
+        });
+
+        socket.on('game_paused', function(data) {
+            pythonPaused = data.paused;
+            document.getElementById('pythonPauseText').textContent = pythonPaused ? '▶ Resume' : '⏸ Pause';
+        });
+
+        socket.on('game_reset', function() {
+            pythonTeams = {};
+            updatePythonScoreboard();
+        });
+
+        // Socket events for Prompt game
+        socket.on('prompt_team_joined', function(data) {
+            promptTeams[data.team_id] = { name: data.team_name, score: data.score };
+            updatePromptScoreboard();
+        });
+
+        socket.on('prompt_score_update', function(data) {
+            if (promptTeams[data.team_id]) {
+                promptTeams[data.team_id].score = data.score;
+                updatePromptScoreboard();
+            }
+        });
+
+        socket.on('prompt_game_paused', function(data) {
+            promptPaused = data.paused;
+            document.getElementById('promptPauseText').textContent = promptPaused ? '▶ Resume' : '⏸ Pause';
+        });
+
+        socket.on('prompt_game_reset', function() {
+            promptTeams = {};
+            updatePromptScoreboard();
+        });
+
+        function updatePythonScoreboard() {
+            const container = document.getElementById('pythonTeamsContainer');
+            const teamArray = Object.entries(pythonTeams)
+                .map(([id, data]) => ({ id, name: data.name, score: data.score }))
+                .sort((a, b) => b.score - a.score);
+
+            if (teamArray.length === 0) {
+                container.innerHTML = '<div class="no-teams"><div class="icon">👥</div><p>Waiting for teams...</p></div>';
+                return;
+            }
+
+            container.innerHTML = teamArray.map((team, i) => {
+                const rankClass = i === 0 ? 'first' : i === 1 ? 'second' : i === 2 ? 'third' : '';
+                const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i+1}`;
+                return `
+                    <div class="team-card ${rankClass}">
+                        <div class="team-rank">${medal}</div>
+                        <div class="team-info"><div class="team-name">${team.name}</div></div>
+                        <div class="team-score">${team.score} pts</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function updatePromptScoreboard() {
+            const container = document.getElementById('promptTeamsContainer');
+            const teamArray = Object.entries(promptTeams)
+                .map(([id, data]) => ({ id, name: data.name, score: data.score }))
+                .sort((a, b) => b.score - a.score);
+
+            if (teamArray.length === 0) {
+                container.innerHTML = '<div class="no-teams"><div class="icon">🤖</div><p>Waiting for teams...</p></div>';
+                return;
+            }
+
+            container.innerHTML = teamArray.map((team, i) => {
+                const rankClass = i === 0 ? 'first' : i === 1 ? 'second' : i === 2 ? 'third' : '';
+                const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i+1}`;
+                return `
+                    <div class="team-card ${rankClass}">
+                        <div class="team-rank">${medal}</div>
+                        <div class="team-info"><div class="team-name">${team.name}</div></div>
+                        <div class="team-score">${team.score} pts</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Python game controls
+        function startPythonRound(round) {
+            fetch('/api/trainer/start_round', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ round: round })
+            });
+        }
+
+        function togglePythonPause() {
+            fetch('/api/trainer/pause_game', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+        }
+
+        function resetPythonGame() {
+            if (confirm('Reset Python game? All scores will be lost.')) {
+                fetch('/api/trainer/reset_game', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+            }
+        }
+
+        // Prompt game controls
+        function startPromptRound(round) {
+            fetch('/api/prompt/trainer/start_round', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ round: round })
+            });
+        }
+
+        function togglePromptPause() {
+            fetch('/api/prompt/trainer/pause', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+        }
+
+        function resetPromptGame() {
+            if (confirm('Reset AI Prompt game? All scores will be lost.')) {
+                fetch('/api/prompt/trainer/reset', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+            }
+        }
+
+        // Poll controls
+        function startPoll() {
+            fetch('/api/poll/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            }).then(() => {
+                document.getElementById('pollStartBtn').style.display = 'none';
+                document.getElementById('pollStopBtn').style.display = 'inline-block';
+            });
+        }
+
+        function stopPoll() {
+            fetch('/api/poll/stop', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            }).then(() => {
+                document.getElementById('pollStartBtn').style.display = 'inline-block';
+                document.getElementById('pollStopBtn').style.display = 'none';
+            });
+        }
+
+        // Initial load
+        fetch('/api/trainer/teams').then(r => r.json()).then(data => {
+            data.teams.forEach(t => { pythonTeams[t.id] = { name: t.name, score: t.score }; });
+            updatePythonScoreboard();
+        }).catch(() => {});
+
+        fetch('/api/prompt/trainer/teams').then(r => r.json()).then(data => {
+            data.teams.forEach(t => { promptTeams[t.id] = { name: t.name, score: t.score }; });
+            updatePromptScoreboard();
+        }).catch(() => {});
+    </script>
+</body>
+</html>
