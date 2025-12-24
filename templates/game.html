@@ -425,12 +425,12 @@
             return div.innerHTML;
         }
 
-        // Socket connection with reconnection
+        // Socket connection - polling only for reliability on free tier
         const socket = io({
-            transports: ['websocket', 'polling'],
+            transports: ['polling'],
             reconnection: true,
-            reconnectionAttempts: 10,
-            reconnectionDelay: 1000
+            reconnectionAttempts: 5,
+            reconnectionDelay: 2000
         });
 
         socket.on('connect', function() {
@@ -439,12 +439,59 @@
         });
 
         socket.on('connect_error', function(error) {
-            console.log('Socket connection error:', error);
+            console.log('Socket connection error, using HTTP polling fallback');
         });
 
-        socket.on('disconnect', function(reason) {
-            console.log('Socket disconnected:', reason);
-        });
+        // HTTP polling fallback for game state
+        setInterval(async function() {
+            try {
+                const response = await fetch('/api/game_state');
+                const data = await response.json();
+
+                // Check if round changed
+                if (data.current_round > 0 && data.current_round !== currentRound && data.game_started) {
+                    currentRound = data.current_round;
+                    document.getElementById('waitingScreen').style.display = 'none';
+                    document.getElementById('gameContent').style.display = 'block';
+                    loadRound(data.current_round);
+                    if (!timerInterval) {
+                        timeRemaining = data.time_remaining || 300;
+                        startTimer();
+                    }
+                }
+
+                // Check poll status
+                if (data.poll_active && document.getElementById('pollOverlay').style.display === 'none') {
+                    // Poll started - fetch poll data
+                    const pollResp = await fetch('/api/poll/results');
+                    const pollData = await pollResp.json();
+                    showPoll(pollData);
+                } else if (!data.poll_active && document.getElementById('pollOverlay').style.display === 'flex') {
+                    document.getElementById('pollOverlay').style.display = 'none';
+                }
+
+                // Update pause state
+                document.getElementById('pausedOverlay').classList.toggle('show', data.game_paused);
+            } catch (e) {
+                console.log('Polling error:', e);
+            }
+        }, 3000); // Poll every 3 seconds
+
+        function showPoll(data) {
+            document.getElementById('pollQuestion').textContent = data.question;
+            let optionsHtml = '';
+            data.options.forEach((option) => {
+                optionsHtml += `
+                    <label style="display:block; background:rgba(255,255,255,0.1); padding:15px 20px; border-radius:10px; margin-bottom:10px; cursor:pointer;">
+                        <input type="checkbox" name="poll_option" value="${option}" style="margin-right:15px; transform:scale(1.3);">
+                        ${option}
+                    </label>
+                `;
+            });
+            document.getElementById('pollOptions').innerHTML = optionsHtml;
+            document.getElementById('pollSubmitted').style.display = 'none';
+            document.getElementById('pollOverlay').style.display = 'flex';
+        }
 
         const teamId = "{{ team_id }}";
         let currentRound = {{ current_round }};

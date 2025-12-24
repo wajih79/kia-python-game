@@ -264,10 +264,10 @@
 
     <script>
         const socket = io({
-            transports: ['websocket', 'polling'],
+            transports: ['polling'],
             reconnection: true,
-            reconnectionAttempts: 10,
-            reconnectionDelay: 1000
+            reconnectionAttempts: 5,
+            reconnectionDelay: 2000
         });
         let teams = {};
         let isPaused = false;
@@ -279,16 +279,37 @@
         });
 
         socket.on('connect_error', function(error) {
-            console.log('Socket connection error:', error);
+            console.log('Socket connection error, using HTTP polling');
         });
 
-        socket.on('disconnect', function(reason) {
-            console.log('Socket disconnected:', reason);
-        });
+        // HTTP polling fallback - poll for teams every 2 seconds
+        setInterval(function() {
+            fetch('/api/trainer/teams')
+                .then(response => response.json())
+                .then(data => {
+                    // Update teams from polling
+                    data.teams.forEach(team => {
+                        teams[team.id] = {
+                            name: team.name,
+                            score: team.score
+                        };
+                    });
+                    updateScoreboard();
+                    document.getElementById('currentRound').textContent = data.current_round;
+                })
+                .catch(e => console.log('Polling error:', e));
 
-        socket.on('connected', function(data) {
-            console.log('Connected to server:', data);
-        });
+            // Also poll for poll results if active
+            fetch('/api/poll/results')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.active) {
+                        document.getElementById('pollVoteCount').textContent = data.total_votes;
+                        updatePollBars(data.results);
+                    }
+                })
+                .catch(e => {});
+        }, 2000);
 
         // Handle new team joining
         socket.on('team_joined', function(data) {

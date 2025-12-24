@@ -633,6 +633,7 @@ def get_game_state():
         'current_round': game_state['current_round'],
         'game_started': game_state['game_started'],
         'game_paused': game_state['game_paused'],
+        'poll_active': game_state['poll_active'],
         'your_score': team_score,
         'your_answers': team_answers,
         'time_remaining': time_remaining
