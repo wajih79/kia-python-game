@@ -438,6 +438,9 @@ def normalize_output(output):
 
 def check_output_match(user_output, expected_output):
     """Check if user output matches expected output (flexible matching)"""
+    if not user_output or not expected_output:
+        return False
+
     user_norm = normalize_output(user_output)
     expected_norm = normalize_output(expected_output)
 
@@ -445,29 +448,31 @@ def check_output_match(user_output, expected_output):
     if user_norm == expected_norm:
         return True
 
+    # Check if expected output is contained in user output (or vice versa)
+    if expected_norm in user_norm or user_norm in expected_norm:
+        return True
+
+    # For multi-line outputs, check if all expected lines are present
+    expected_lines = [line.strip().lower() for line in expected_output.strip().split('\n') if line.strip()]
+    user_lines = [line.strip().lower() for line in user_output.strip().split('\n') if line.strip()]
+
+    if expected_lines and user_lines:
+        # Check if all expected lines match user lines
+        if expected_lines == user_lines:
+            return True
+        # Check if expected content is in user output
+        if all(exp_line in user_norm for exp_line in expected_lines):
+            return True
+
     # Check if outputs contain the same key numbers
     user_numbers = re.findall(r'[\d,]+\.?\d*', user_output or '')
     expected_numbers = re.findall(r'[\d,]+\.?\d*', expected_output or '')
 
     if user_numbers and expected_numbers:
-        # Compare all significant numbers
         try:
-            # Get the main number (usually the last/largest one)
             user_val = float(user_numbers[-1].replace(',', '').rstrip('.'))
             expected_val = float(expected_numbers[-1].replace(',', '').rstrip('.'))
-            if abs(user_val - expected_val) < 1:  # Allow small differences
-                return True
-        except:
-            pass
-
-    # Also try simple substring match for the key value
-    # Extract just the number portion and compare
-    user_clean = re.sub(r'[^\d.]', '', user_output or '')
-    expected_clean = re.sub(r'[^\d.]', '', expected_output or '')
-
-    if user_clean and expected_clean:
-        try:
-            if abs(float(user_clean) - float(expected_clean)) < 1:
+            if abs(user_val - expected_val) < 1:
                 return True
         except:
             pass
