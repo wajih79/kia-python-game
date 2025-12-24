@@ -366,7 +366,7 @@
     </div>
 
     <!-- Poll Overlay -->
-    <div class="poll-overlay" id="pollOverlay" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.95); z-index:300; display:none; align-items:center; justify-content:center;">
+    <div class="poll-overlay" id="pollOverlay" style="position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.95); z-index:300; display:none; align-items:center; justify-content:center;">
         <div style="background:linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border-radius:20px; padding:40px; max-width:600px; width:90%; text-align:center;">
             <div style="font-size:3rem; margin-bottom:20px;">📊</div>
             <h2 style="color:#ffd700; margin-bottom:10px;">Quick Poll</h2>
@@ -418,7 +418,34 @@
     </div>
 
     <script>
-        const socket = io();
+        // Utility function to escape HTML
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Socket connection with reconnection
+        const socket = io({
+            transports: ['websocket', 'polling'],
+            reconnection: true,
+            reconnectionAttempts: 10,
+            reconnectionDelay: 1000
+        });
+
+        socket.on('connect', function() {
+            console.log('Socket connected!', socket.id);
+            socket.emit('join_team_room', { team_id: teamId });
+        });
+
+        socket.on('connect_error', function(error) {
+            console.log('Socket connection error:', error);
+        });
+
+        socket.on('disconnect', function(reason) {
+            console.log('Socket disconnected:', reason);
+        });
+
         const teamId = "{{ team_id }}";
         let currentRound = {{ current_round }};
         let answeredQuestions = {};
@@ -547,8 +574,6 @@ sys.stdout = StringIO()
                 return { output: '', error: error.message };
             }
         }
-
-        socket.emit('join_team_room', { team_id: teamId });
 
         // Handle round started
         socket.on('round_started', function(data) {
