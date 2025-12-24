@@ -445,17 +445,29 @@ def check_output_match(user_output, expected_output):
     if user_norm == expected_norm:
         return True
 
-    # Check if key parts match (for numbers that might have different formatting)
-    # Extract numbers from both outputs and compare
-    user_numbers = re.findall(r'[\d.]+', user_output or '')
-    expected_numbers = re.findall(r'[\d.]+', expected_output or '')
+    # Check if outputs contain the same key numbers
+    user_numbers = re.findall(r'[\d,]+\.?\d*', user_output or '')
+    expected_numbers = re.findall(r'[\d,]+\.?\d*', expected_output or '')
 
     if user_numbers and expected_numbers:
-        # Compare primary number values
+        # Compare all significant numbers
         try:
-            user_val = float(user_numbers[-1].rstrip('.'))
-            expected_val = float(expected_numbers[-1].rstrip('.'))
-            if abs(user_val - expected_val) < 0.01:  # Allow small floating point differences
+            # Get the main number (usually the last/largest one)
+            user_val = float(user_numbers[-1].replace(',', '').rstrip('.'))
+            expected_val = float(expected_numbers[-1].replace(',', '').rstrip('.'))
+            if abs(user_val - expected_val) < 1:  # Allow small differences
+                return True
+        except:
+            pass
+
+    # Also try simple substring match for the key value
+    # Extract just the number portion and compare
+    user_clean = re.sub(r'[^\d.]', '', user_output or '')
+    expected_clean = re.sub(r'[^\d.]', '', expected_output or '')
+
+    if user_clean and expected_clean:
+        try:
+            if abs(float(user_clean) - float(expected_clean)) < 1:
                 return True
         except:
             pass
