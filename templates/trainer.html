@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trainer Dashboard - KIA Python Challenge</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+    <style>
+        body {
+            background: #0f0f23;
+            color: white;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+        }
+        .navbar-custom {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            padding: 15px 30px;
+        }
+        .navbar-brand {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #ffd700 !important;
+        }
+        .dashboard {
+            padding: 30px;
+        }
+        .qr-section {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .qr-section img {
+            max-width: 250px;
+            margin: 20px 0;
+        }
+        .qr-section h4 {
+            color: #1a1a2e;
+            font-weight: 700;
+        }
+        .qr-section .join-url {
+            background: #f0f0f0;
+            padding: 10px 20px;
+            border-radius: 10px;
+            font-family: monospace;
+            color: #333;
+            word-break: break-all;
+        }
+        .scoreboard {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 30px;
+        }
+        .scoreboard h3 {
+            color: #ffd700;
+            margin-bottom: 25px;
+            font-weight: 700;
+        }
+        .team-card {
+            background: rgba(255,255,255,0.1);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.3s ease;
+        }
+        .team-card:hover {
+            background: rgba(255,255,255,0.15);
+        }
+        .team-card.first {
+            background: linear-gradient(135deg, #ffd700 0%, #c9a227 100%);
+            color: #1a1a2e;
+        }
+        .team-card.second {
+            background: linear-gradient(135deg, #c0c0c0 0%, #a0a0a0 100%);
+            color: #1a1a2e;
+        }
+        .team-card.third {
+            background: linear-gradient(135deg, #cd7f32 0%, #a56023 100%);
+            color: white;
+        }
+        .team-rank {
+            font-size: 2rem;
+            font-weight: 700;
+            width: 60px;
+        }
+        .team-info {
+            flex-grow: 1;
+            padding: 0 20px;
+        }
+        .team-name {
+            font-size: 1.3rem;
+            font-weight: 600;
+        }
+        .team-score {
+            font-size: 2rem;
+            font-weight: 700;
+        }
+        .control-panel {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            border-radius: 20px;
+            padding: 30px;
+        }
+        .control-panel h3 {
+            color: #ffd700;
+            margin-bottom: 25px;
+            font-weight: 700;
+        }
+        .round-btn {
+            background: rgba(255,255,255,0.1);
+            border: 2px solid rgba(255,255,255,0.3);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 10px;
+            margin: 5px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .round-btn:hover {
+            background: rgba(255,255,255,0.2);
+            border-color: #ffd700;
+        }
+        .round-btn.active {
+            background: #ffd700;
+            color: #1a1a2e;
+            border-color: #ffd700;
+        }
+        .action-btn {
+            padding: 15px 40px;
+            font-size: 1.2rem;
+            border-radius: 10px;
+            margin: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .btn-start {
+            background: linear-gradient(135deg, #28a745 0%, #218838 100%);
+            border: none;
+            color: white;
+        }
+        .btn-pause {
+            background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%);
+            border: none;
+            color: #1a1a2e;
+        }
+        .btn-reset {
+            background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+            border: none;
+            color: white;
+        }
+        .current-round {
+            font-size: 1.5rem;
+            color: #ffd700;
+            margin: 20px 0;
+        }
+        .no-teams {
+            text-align: center;
+            padding: 40px;
+            opacity: 0.7;
+        }
+        .no-teams .icon {
+            font-size: 4rem;
+            margin-bottom: 20px;
+        }
+        .live-badge {
+            background: #dc3545;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .score-animation {
+            animation: scoreUp 0.5s ease;
+        }
+        @keyframes scoreUp {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.2); color: #28a745; }
+            100% { transform: scale(1); }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-custom">
+        <span class="navbar-brand">🎓 Trainer Dashboard</span>
+        <span class="live-badge">● LIVE</span>
+    </nav>
+
+    <div class="dashboard">
+        <div class="row">
+            <!-- QR Code Section -->
+            <div class="col-lg-4">
+                <div class="qr-section">
+                    <h4>Scan to Join</h4>
+                    <img src="data:image/png;base64,{{ qr_code }}" alt="QR Code">
+                    <p class="join-url">{{ join_url }}</p>
+                    <small class="text-muted">Teams scan this QR code to join the game</small>
+                </div>
+
+                <!-- Control Panel -->
+                <div class="control-panel">
+                    <h3>Game Control</h3>
+                    <p class="current-round">Current Round: <span id="currentRound">{{ current_round }}</span> / {{ total_rounds }}</p>
+
+                    <div class="mb-4">
+                        <p><strong>Select Round:</strong></p>
+                        {% for i in range(1, total_rounds + 1) %}
+                        <button class="round-btn" onclick="startRound({{ i }})">Round {{ i }}</button>
+                        {% endfor %}
+                    </div>
+
+                    <div class="text-center">
+                        <button class="action-btn btn-pause" onclick="togglePause()">
+                            <span id="pauseText">⏸ Pause</span>
+                        </button>
+                        <button class="action-btn btn-reset" onclick="resetGame()">🔄 Reset Game</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Scoreboard -->
+            <div class="col-lg-8">
+                <div class="scoreboard">
+                    <h3>🏆 Live Scoreboard</h3>
+                    <div id="teamsContainer">
+                        <div class="no-teams">
+                            <div class="icon">👥</div>
+                            <p>Waiting for teams to join...</p>
+                            <p>Share the QR code or URL with participants</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        let teams = {};
+        let isPaused = false;
+
+        // Connect to trainer room
+        socket.emit('join_trainer');
+
+        socket.on('connected', function(data) {
+            console.log('Connected to server:', data);
+        });
+
+        // Handle new team joining
+        socket.on('team_joined', function(data) {
+            teams[data.team_id] = {
+                name: data.team_name,
+                score: data.score
+            };
+            updateScoreboard();
+        });
+
+        // Handle score updates
+        socket.on('score_update', function(data) {
+            if (teams[data.team_id]) {
+                teams[data.team_id].score = data.score;
+                updateScoreboard();
+
+                // Show notification
+                if (data.correct) {
+                    showNotification(`${data.team_name} answered correctly! +${data.points} pts`);
+                }
+            }
+        });
+
+        // Handle round started
+        socket.on('round_started', function(data) {
+            document.getElementById('currentRound').textContent = data.round;
+            showNotification(`Round ${data.round} started: ${data.title}`);
+        });
+
+        // Handle game paused
+        socket.on('game_paused', function(data) {
+            isPaused = data.paused;
+            document.getElementById('pauseText').textContent = isPaused ? '▶ Resume' : '⏸ Pause';
+        });
+
+        // Handle game reset
+        socket.on('game_reset', function() {
+            teams = {};
+            updateScoreboard();
+            document.getElementById('currentRound').textContent = '0';
+            showNotification('Game has been reset');
+        });
+
+        function updateScoreboard() {
+            const container = document.getElementById('teamsContainer');
+
+            // Convert to array and sort by score
+            const teamArray = Object.entries(teams).map(([id, data]) => ({
+                id: id,
+                name: data.name,
+                score: data.score
+            })).sort((a, b) => b.score - a.score);
+
+            if (teamArray.length === 0) {
+                container.innerHTML = `
+                    <div class="no-teams">
+                        <div class="icon">👥</div>
+                        <p>Waiting for teams to join...</p>
+                        <p>Share the QR code or URL with participants</p>
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '';
+            teamArray.forEach((team, index) => {
+                const rankClass = index === 0 ? 'first' : index === 1 ? 'second' : index === 2 ? 'third' : '';
+                const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `#${index + 1}`;
+
+                html += `
+                    <div class="team-card ${rankClass}">
+                        <div class="team-rank">${medal}</div>
+                        <div class="team-info">
+                            <div class="team-name">${team.name}</div>
+                        </div>
+                        <div class="team-score" id="score-${team.id}">${team.score} pts</div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        function startRound(round) {
+            fetch('/api/trainer/start_round', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ round: round })
+            });
+        }
+
+        function togglePause() {
+            fetch('/api/trainer/pause_game', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+        }
+
+        function resetGame() {
+            if (confirm('Are you sure you want to reset the game? All scores will be lost.')) {
+                fetch('/api/trainer/reset_game', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+            }
+        }
+
+        function showNotification(message) {
+            // Simple console notification for now
+            console.log('Notification:', message);
+        }
+
+        // Initial load of teams
+        fetch('/api/trainer/teams')
+            .then(response => response.json())
+            .then(data => {
+                data.teams.forEach(team => {
+                    teams[team.id] = {
+                        name: team.name,
+                        score: team.score
+                    };
+                });
+                updateScoreboard();
+                document.getElementById('currentRound').textContent = data.current_round;
+            });
+    </script>
+</body>
+</html>

@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ team_name }} - KIA Python Challenge</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+    <!-- Pyodide for running Python in browser -->
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js"></script>
+    <style>
+        body {
+            background: #0f0f23;
+            color: white;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+        }
+        .header {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .team-name {
+            font-size: 1.3rem;
+            font-weight: 600;
+        }
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        .timer-display {
+            background: #dc3545;
+            color: white;
+            padding: 10px 25px;
+            border-radius: 50px;
+            font-size: 1.5rem;
+            font-weight: 700;
+            font-family: monospace;
+        }
+        .timer-display.warning {
+            animation: pulse 1s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { background: #dc3545; }
+            50% { background: #ff6b6b; }
+        }
+        .score-display {
+            background: linear-gradient(135deg, #ffd700 0%, #c9a227 100%);
+            color: #1a1a2e;
+            padding: 10px 30px;
+            border-radius: 50px;
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+        .game-container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 30px;
+        }
+        .waiting-screen {
+            text-align: center;
+            padding: 100px 20px;
+        }
+        .waiting-screen .icon {
+            font-size: 6rem;
+            margin-bottom: 30px;
+            animation: bounce 2s infinite;
+        }
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-20px); }
+        }
+        .loading-screen {
+            text-align: center;
+            padding: 100px 20px;
+        }
+        .loading-screen .spinner {
+            font-size: 4rem;
+            animation: spin 2s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .round-header {
+            text-align: center;
+            padding: 30px;
+            margin-bottom: 30px;
+            background: linear-gradient(135deg, rgba(255,215,0,0.2) 0%, rgba(255,215,0,0.05) 100%);
+            border-radius: 20px;
+            border: 2px solid rgba(255,215,0,0.3);
+        }
+        .round-header h2 {
+            color: #ffd700;
+            font-size: 1.2rem;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            margin-bottom: 10px;
+        }
+        .round-header h3 {
+            font-size: 2rem;
+            font-weight: 700;
+        }
+        .question-card {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 25px;
+            border: 2px solid rgba(255,255,255,0.1);
+        }
+        .question-card.answered {
+            opacity: 0.7;
+        }
+        .question-card.correct {
+            border-color: #28a745;
+            background: linear-gradient(135deg, rgba(40,167,69,0.2) 0%, #16213e 100%);
+        }
+        .question-card.incorrect {
+            border-color: #dc3545;
+        }
+        .question-id {
+            background: rgba(255,215,0,0.2);
+            color: #ffd700;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            display: inline-block;
+            margin-bottom: 15px;
+        }
+        .question-id.bonus {
+            background: rgba(255,0,128,0.2);
+            color: #ff0080;
+        }
+        .question-text {
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+        .code-editor {
+            background: #282c34;
+            border-radius: 10px;
+            padding: 5px;
+            margin-bottom: 20px;
+        }
+        .code-editor textarea {
+            width: 100%;
+            min-height: 180px;
+            background: #282c34;
+            color: #abb2bf;
+            border: none;
+            padding: 15px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            resize: vertical;
+            border-radius: 8px;
+        }
+        .code-editor textarea:focus {
+            outline: 2px solid #ffd700;
+        }
+        .code-editor textarea:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        .btn-run {
+            background: linear-gradient(135deg, #28a745 0%, #218838 100%);
+            border: none;
+            border-radius: 10px;
+            padding: 15px 40px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .btn-run:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(40,167,69,0.4);
+        }
+        .btn-run:disabled {
+            background: #666;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .output-section {
+            margin-top: 20px;
+            display: none;
+        }
+        .output-section.show {
+            display: block;
+        }
+        .output-box {
+            background: #1e1e1e;
+            border-radius: 10px;
+            padding: 20px;
+            font-family: monospace;
+            margin-bottom: 15px;
+        }
+        .output-label {
+            font-size: 0.85rem;
+            color: #888;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .output-content {
+            color: #4ec9b0;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .output-content.error {
+            color: #f44747;
+        }
+        .result-badge {
+            display: inline-block;
+            padding: 10px 25px;
+            border-radius: 50px;
+            font-weight: 700;
+            font-size: 1.1rem;
+            margin-top: 15px;
+        }
+        .result-badge.correct {
+            background: linear-gradient(135deg, #28a745 0%, #218838 100%);
+            color: white;
+        }
+        .result-badge.incorrect {
+            background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+            color: white;
+        }
+        .correct-answer-box {
+            background: rgba(40,167,69,0.1);
+            border: 2px solid #28a745;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 15px;
+        }
+        .correct-answer-box h5 {
+            color: #28a745;
+            margin-bottom: 10px;
+        }
+        .correct-answer-box pre {
+            background: #282c34;
+            padding: 15px;
+            border-radius: 8px;
+            color: #abb2bf;
+            margin: 0;
+        }
+        .points-badge {
+            float: right;
+            background: rgba(255,255,255,0.1);
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+        }
+        .points-badge.earned {
+            background: rgba(40,167,69,0.3);
+            color: #28a745;
+        }
+        .score-popup {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: linear-gradient(135deg, #28a745 0%, #218838 100%);
+            color: white;
+            padding: 40px 60px;
+            border-radius: 20px;
+            font-size: 2rem;
+            font-weight: 700;
+            z-index: 1000;
+            animation: popIn 0.5s ease;
+            display: none;
+        }
+        @keyframes popIn {
+            0% { transform: translate(-50%, -50%) scale(0); }
+            50% { transform: translate(-50%, -50%) scale(1.1); }
+            100% { transform: translate(-50%, -50%) scale(1); }
+        }
+        .paused-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.9);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 200;
+        }
+        .paused-overlay.show {
+            display: flex;
+        }
+        .paused-message {
+            text-align: center;
+            font-size: 2rem;
+        }
+        .paused-message .icon {
+            font-size: 5rem;
+            margin-bottom: 20px;
+        }
+        .time-up-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(220,53,69,0.95);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 200;
+        }
+        .time-up-overlay.show {
+            display: flex;
+        }
+        .time-up-message {
+            text-align: center;
+            color: white;
+        }
+        .time-up-message .icon {
+            font-size: 6rem;
+            margin-bottom: 20px;
+        }
+        .time-up-message h2 {
+            font-size: 3rem;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="team-name">👥 {{ team_name }}</div>
+        <div class="header-right">
+            <div class="timer-display" id="timerDisplay">05:00</div>
+            <div class="score-display" id="scoreDisplay">{{ score }} pts</div>
+        </div>
+    </div>
+
+    <div class="score-popup" id="scorePopup"></div>
+
+    <div class="paused-overlay" id="pausedOverlay">
+        <div class="paused-message">
+            <div class="icon">⏸️</div>
+            <p>Game Paused</p>
+            <small>Waiting for trainer to resume...</small>
+        </div>
+    </div>
+
+    <div class="time-up-overlay" id="timeUpOverlay">
+        <div class="time-up-message">
+            <div class="icon">⏰</div>
+            <h2>Time's Up!</h2>
+            <p>Waiting for next round...</p>
+        </div>
+    </div>
+
+    <div class="game-container">
+        <!-- Loading Pyodide -->
+        <div id="loadingScreen" class="loading-screen">
+            <div class="spinner">⚙️</div>
+            <h2>Loading Python Environment...</h2>
+            <p>Please wait while we set up your coding environment</p>
+        </div>
+
+        <!-- Waiting Screen -->
+        <div id="waitingScreen" class="waiting-screen" style="display: none;">
+            <div class="icon">⏳</div>
+            <h2>Waiting for Game to Start</h2>
+            <p>The trainer will start the game shortly...</p>
+            <p style="margin-top: 30px; opacity: 0.7;">Your team: <strong>{{ team_name }}</strong></p>
+        </div>
+
+        <!-- Game Content -->
+        <div id="gameContent" style="display: none;">
+            <div class="round-header" id="roundHeader">
+                <h2 id="roundTitle">Round 1</h2>
+                <h3 id="roundTheme">Loading...</h3>
+            </div>
+
+            <div id="questionsContainer">
+                <!-- Questions will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        const teamId = "{{ team_id }}";
+        let currentRound = {{ current_round }};
+        let answeredQuestions = {};
+        let totalScore = {{ score }};
+        let pyodide = null;
+        let timerInterval = null;
+        let timeRemaining = 300; // 5 minutes in seconds
+        let roundActive = false;
+
+        // Questions data from server
+        const allQuestions = {{ questions | tojson | safe }};
+
+        // Initialize Pyodide (Python in browser)
+        async function initPyodide() {
+            try {
+                pyodide = await loadPyodide();
+                console.log("Pyodide loaded successfully!");
+                document.getElementById('loadingScreen').style.display = 'none';
+
+                // Check game state after loading
+                const response = await fetch('/api/game_state');
+                const data = await response.json();
+
+                answeredQuestions = data.your_answers || {};
+                totalScore = data.your_score;
+                document.getElementById('scoreDisplay').textContent = totalScore + ' pts';
+
+                if (data.game_started && data.current_round > 0) {
+                    document.getElementById('waitingScreen').style.display = 'none';
+                    document.getElementById('gameContent').style.display = 'block';
+                    loadRound(data.current_round);
+
+                    // Start timer if round is active
+                    if (data.time_remaining && data.time_remaining > 0) {
+                        timeRemaining = data.time_remaining;
+                        startTimer();
+                    }
+                } else {
+                    document.getElementById('waitingScreen').style.display = 'block';
+                }
+
+                if (data.game_paused) {
+                    document.getElementById('pausedOverlay').classList.add('show');
+                }
+            } catch (error) {
+                console.error("Failed to load Pyodide:", error);
+                document.getElementById('loadingScreen').innerHTML = `
+                    <div class="icon">❌</div>
+                    <h2>Error Loading Python</h2>
+                    <p>Please refresh the page to try again</p>
+                `;
+            }
+        }
+
+        // Start the timer
+        function startTimer() {
+            roundActive = true;
+            document.getElementById('timeUpOverlay').classList.remove('show');
+            updateTimerDisplay();
+
+            timerInterval = setInterval(() => {
+                timeRemaining--;
+                updateTimerDisplay();
+
+                if (timeRemaining <= 0) {
+                    clearInterval(timerInterval);
+                    roundActive = false;
+                    document.getElementById('timeUpOverlay').classList.add('show');
+                    disableAllInputs();
+                }
+            }, 1000);
+        }
+
+        // Update timer display
+        function updateTimerDisplay() {
+            const minutes = Math.floor(timeRemaining / 60);
+            const seconds = timeRemaining % 60;
+            const display = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            const timerEl = document.getElementById('timerDisplay');
+            timerEl.textContent = display;
+
+            // Add warning class when less than 1 minute
+            if (timeRemaining <= 60) {
+                timerEl.classList.add('warning');
+            } else {
+                timerEl.classList.remove('warning');
+            }
+        }
+
+        // Disable all inputs when time is up
+        function disableAllInputs() {
+            document.querySelectorAll('textarea').forEach(el => el.disabled = true);
+            document.querySelectorAll('.btn-run').forEach(el => el.disabled = true);
+        }
+
+        // Run Python code using Pyodide
+        async function runPythonCode(code) {
+            if (!pyodide) {
+                return { output: '', error: 'Python environment not loaded' };
+            }
+
+            try {
+                // Redirect stdout to capture print output
+                pyodide.runPython(`
+import sys
+from io import StringIO
+sys.stdout = StringIO()
+                `);
+
+                // Run the user's code
+                pyodide.runPython(code);
+
+                // Get the output
+                const output = pyodide.runPython(`sys.stdout.getvalue()`);
+
+                // Reset stdout
+                pyodide.runPython(`sys.stdout = sys.__stdout__`);
+
+                return { output: output.trim(), error: null };
+            } catch (error) {
+                // Reset stdout on error
+                try {
+                    pyodide.runPython(`sys.stdout = sys.__stdout__`);
+                } catch (e) {}
+
+                return { output: '', error: error.message };
+            }
+        }
+
+        socket.emit('join_team_room', { team_id: teamId });
+
+        // Handle round started
+        socket.on('round_started', function(data) {
+            currentRound = data.round;
+            timeRemaining = data.time_limit || 300; // Default 5 minutes
+
+            document.getElementById('waitingScreen').style.display = 'none';
+            document.getElementById('gameContent').style.display = 'block';
+            document.getElementById('timeUpOverlay').classList.remove('show');
+
+            loadRound(data.round);
+
+            // Clear existing timer and start new one
+            if (timerInterval) clearInterval(timerInterval);
+            startTimer();
+        });
+
+        // Handle game paused
+        socket.on('game_paused', function(data) {
+            document.getElementById('pausedOverlay').classList.toggle('show', data.paused);
+
+            if (data.paused && timerInterval) {
+                clearInterval(timerInterval);
+            } else if (!data.paused && roundActive) {
+                startTimer();
+            }
+        });
+
+        // Handle game reset
+        socket.on('game_reset', function() {
+            window.location.reload();
+        });
+
+        function loadRound(roundNum) {
+            const round = allQuestions[roundNum];
+            if (!round) return;
+
+            document.getElementById('roundTitle').textContent = `Round ${roundNum}`;
+            document.getElementById('roundTheme').textContent = round.theme;
+
+            const container = document.getElementById('questionsContainer');
+            let html = '';
+
+            round.questions.forEach(q => {
+                const isBonus = q.id.endsWith('.3');
+                const answered = answeredQuestions[q.id];
+                const cardClass = answered ? (answered.correct ? 'answered correct' : 'answered incorrect') : '';
+
+                html += `
+                    <div class="question-card ${cardClass}" id="card-${q.id}">
+                        <span class="question-id ${isBonus ? 'bonus' : ''}">
+                            ${isBonus ? '⭐ BONUS ' : ''}Question ${q.id}
+                        </span>
+                        <span class="points-badge ${answered && answered.correct ? 'earned' : ''}" id="points-${q.id}">
+                            ${answered && answered.correct ? '✓ ' + q.points + ' pts' : q.points + ' pts'}
+                        </span>
+
+                        <p class="question-text">${q.question}</p>
+
+                        <div class="code-editor">
+                            <textarea
+                                id="code-${q.id}"
+                                placeholder="Write your Python code here..."
+                                ${answered ? 'disabled' : ''}
+                            >${answered ? answered.code : q.code_template}</textarea>
+                        </div>
+
+                        <button class="btn-run"
+                                id="btn-${q.id}"
+                                onclick="runAndSubmit('${q.id}')"
+                                ${answered ? 'disabled' : ''}>
+                            ▶ Run Code
+                        </button>
+
+                        <div class="output-section ${answered ? 'show' : ''}" id="output-${q.id}">
+                            <div class="output-box">
+                                <div class="output-label">Your Output:</div>
+                                <div class="output-content" id="userOutput-${q.id}">${answered ? answered.output : ''}</div>
+                            </div>
+
+                            ${answered ? `
+                                <div class="result-badge ${answered.correct ? 'correct' : 'incorrect'}">
+                                    ${answered.correct ? '✓ CORRECT! +' + answered.points + ' points' : '✗ INCORRECT'}
+                                </div>
+                                ${!answered.correct ? `
+                                    <div class="correct-answer-box">
+                                        <h5>Expected Output:</h5>
+                                        <pre>${q.expected_output || ''}</pre>
+                                    </div>
+                                ` : ''}
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        async function runAndSubmit(questionId) {
+            if (!roundActive) {
+                alert("Time's up! You cannot submit answers.");
+                return;
+            }
+
+            const codeEl = document.getElementById(`code-${questionId}`);
+            const code = codeEl.value;
+            const btn = document.getElementById(`btn-${questionId}`);
+            const outputSection = document.getElementById(`output-${questionId}`);
+            const userOutputEl = document.getElementById(`userOutput-${questionId}`);
+
+            if (!code.trim()) {
+                alert('Please write some code first!');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = '⏳ Running...';
+
+            // Run the code
+            const result = await runPythonCode(code);
+
+            // Show output section
+            outputSection.classList.add('show');
+
+            if (result.error) {
+                userOutputEl.className = 'output-content error';
+                userOutputEl.textContent = 'Error: ' + result.error;
+                btn.disabled = false;
+                btn.innerHTML = '▶ Run Code';
+                return;
+            }
+
+            userOutputEl.className = 'output-content';
+            userOutputEl.textContent = result.output || '(no output)';
+
+            // Submit to server for scoring
+            try {
+                const response = await fetch('/api/submit_answer', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        question_id: questionId,
+                        code: code,
+                        output: result.output
+                    })
+                });
+
+                const data = await response.json();
+
+                answeredQuestions[questionId] = {
+                    code: code,
+                    output: result.output,
+                    correct: data.correct,
+                    points: data.points_earned
+                };
+
+                const card = document.getElementById(`card-${questionId}`);
+                const pointsBadge = document.getElementById(`points-${questionId}`);
+
+                card.classList.add('answered');
+                codeEl.disabled = true;
+
+                // Add result badge
+                let resultHtml = '';
+                if (data.correct) {
+                    card.classList.add('correct');
+                    btn.innerHTML = '✓ Correct!';
+                    resultHtml = `<div class="result-badge correct">✓ CORRECT! +${data.points_earned} points</div>`;
+                    pointsBadge.classList.add('earned');
+                    pointsBadge.textContent = '✓ ' + data.points_earned + ' pts';
+
+                    // Update score
+                    totalScore = data.total_score;
+                    document.getElementById('scoreDisplay').textContent = totalScore + ' pts';
+                    showScorePopup(`+${data.points_earned} pts!`);
+                } else {
+                    card.classList.add('incorrect');
+                    btn.innerHTML = '✗ Try Again';
+                    btn.disabled = false; // Allow retry for incorrect answers
+                    card.classList.remove('answered'); // Allow editing
+                    codeEl.disabled = false;
+
+                    resultHtml = `
+                        <div class="result-badge incorrect">✗ INCORRECT - Try Again!</div>
+                        <div class="correct-answer-box">
+                            <h5>📤 Expected Output:</h5>
+                            <pre>${data.expected_output || 'N/A'}</pre>
+                        </div>
+                        <div class="correct-answer-box" style="border-color: #17a2b8; margin-top: 15px;">
+                            <h5 style="color: #17a2b8;">💡 Correct Code:</h5>
+                            <pre>${escapeHtml(data.solution_code || 'N/A')}</pre>
+                        </div>
+                    `;
+                }
+
+                outputSection.innerHTML = `
+                    <div class="output-box">
+                        <div class="output-label">Your Output:</div>
+                        <div class="output-content">${result.output || '(no output)'}</div>
+                    </div>
+                    ${resultHtml}
+                `;
+
+            } catch (error) {
+                console.error('Error submitting:', error);
+                btn.disabled = false;
+                btn.innerHTML = '▶ Run Code';
+            }
+        }
+
+        function showScorePopup(text) {
+            const popup = document.getElementById('scorePopup');
+            popup.textContent = text;
+            popup.style.display = 'block';
+
+            setTimeout(() => {
+                popup.style.display = 'none';
+            }, 1500);
+        }
+
+        // Initialize when page loads
+        initPyodide();
+    </script>
+</body>
+</html>
